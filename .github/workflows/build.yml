@@ -1,0 +1,46 @@
+name: Build plugin
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: macos-latest
+            name: macOS
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Collect files
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp -R "build/ReverseSwell_artefacts/Release/VST3/Reverse Swell.vst3" dist/
+          cp -R build/ReverseSwell_artefacts/Release/Standalone/* dist/
+
+      - name: Sign and zip (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          codesign --force --deep -s - "dist/Reverse Swell.vst3"
+          codesign --force --deep -s - "dist/Reverse Swell.app"
+          ditto -c -k --keepParent dist "ReverseSwell-macOS.zip"
+          rm -rf dist && mkdir dist && mv ReverseSwell-macOS.zip dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ReverseSwell-${{ matrix.name }}
+          path: dist
